@@ -28,8 +28,7 @@ type ErrorItem struct {
 type ErrorItems []ErrorItem
 
 type ErrorMessage struct {
-  // FIXME: 項目名が型名になる
-  ErrorItems `json:errors`
+  ErrorItems `json:"errors"`
 
   Overview string
 }
@@ -96,7 +95,6 @@ func YokohamaHandler(w http.ResponseWriter, r *http.Request) {
   }
 
   if !(specificTime > 0 && specificTime < 25) {
-    // TODO: どの項目が？をレスポンスに設定する
     item := ErrorItem{Resource: "", Field: "time", Message: "時間は、1~24のみ選択が可能です。"}
     var items ErrorItems
     items = append(items, item)
@@ -194,7 +192,7 @@ func CreateCache() bool {
   return true
 }
 
-func AnalyzeHtml(r io.Reader) (weatherItems WeatherItems, err error) {
+func AnalyzeHtml(r io.Reader) (WeatherItems, error) {
   // Load the HTML document
   doc, err := goquery.NewDocumentFromReader(r)
   if err != nil {
@@ -202,8 +200,8 @@ func AnalyzeHtml(r io.Reader) (weatherItems WeatherItems, err error) {
     return nil, err
   }
 
-  // HACKME: 配列の初期化の方法がわからない
-  // weatherItems := make([]WeatherItems, 0)
+  var weatherItems WeatherItems
+
   units := []string{}
   doc.Find("#tbl_list tr:nth-child(2) td").Each(func(i int, td *goquery.Selection) {
     units = append(units, td.Text())
@@ -224,7 +222,7 @@ func AnalyzeHtml(r io.Reader) (weatherItems WeatherItems, err error) {
     }
   })
 
-  return
+  return weatherItems, nil
 }
 
 func Exists(filename string) bool {
@@ -235,7 +233,7 @@ func Exists(filename string) bool {
 func CacheFilePath(name string) string {
   t := time.Now()
   // https://qiita.com/unbabel/items/c8782420391c108e3cac
-  const tmpFileLayout = "2006010203"
+  const tmpFileLayout = "2006010215"
 
   return "./.cache" + "/" + name + t.Format(tmpFileLayout)
 }
