@@ -15,5 +15,5 @@
 # vendor/
 
 # Mine
-cache/*
+.cache/*
 !.keep
