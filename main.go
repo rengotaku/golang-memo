@@ -1,7 +1,6 @@
 package main
 
 import (
-  "fmt"
   "log"
   "net/http"
   "github.com/PuerkitoBio/goquery"
@@ -13,12 +12,15 @@ import (
   "io/ioutil"
   "strings"
   "errors"
+  "flag"
 )
 
 const tmpFileName string = "yokohama-weather.html"
-const port string = "8080"
+const defaultPort string = "8080"
 const url string = "https://www.jma.go.jp/jp/amedas_h/today-46106.html"
 const adminMessage string = "予期しないエラーが発生しました。管理者にご連絡下さい。"
+
+var Logger *log.Logger
 
 type ErrorItem struct {
   Resource string
@@ -75,10 +77,23 @@ type WeatherItem struct {
 }
 type WeatherItems []WeatherItem
 
+func init(){
+  Logger = log.New(os.Stdout, "[APP] ", log.LstdFlags|log.Lmicroseconds|log.Lshortfile)
+}
+
 func main() {
   http.HandleFunc("/yokohama", YokohamaHandler) // ハンドラを登録してウェブページを表示させる
 
-  fmt.Println("application starting on localhost:" + port)
+  flag.Parse()
+
+  var port string
+  if flag.Arg(0) != "" {
+    port = flag.Arg(0)
+  } else {
+    port = defaultPort
+  }
+
+  Logf("application starting on localhost:" + port)
   http.ListenAndServe(":" + port, nil)
 }
 
@@ -88,7 +103,6 @@ func YokohamaHandler(w http.ResponseWriter, r *http.Request) {
   // HACK: もっといい初期化の方法がありそう。
   specificTime := -1
   if rawSpecificTime == "" {
-    fmt.Println(time.Now())
     specificTime = time.Now().Hour()
   } else {
     specificTime, _ = strconv.Atoi(rawSpecificTime)
@@ -127,7 +141,7 @@ func YokohamaHandler(w http.ResponseWriter, r *http.Request) {
   res, err := json.Marshal(weatherItem)
 
   if err != nil {
-    log.Panic(err.Error())
+    Logf(err.Error())
     http.Error(w, err.Error(), http.StatusInternalServerError)
     return
   }
@@ -166,28 +180,36 @@ func FetchYokohamaWeather() (WeatherItems, error) {
 }
 
 func CreateCache() bool {
+  if err := os.Mkdir(CacheFilePath(""), 0777); err != nil {
+    Logf(err.Error())
+  }
+
   res, _ := http.Get(url)
   defer res.Body.Close()
 
   if res.StatusCode != http.StatusOK {
-    log.Fatal("Status code isn't OK. It was " + string(res.StatusCode))
+    Logf("Status code isn't OK. It was " + string(res.StatusCode))
     return false
   }
 
-  file, err := os.Create(CacheFilePath(tmpFileName))
+  tmpFilePath := CacheFilePath(tmpFileName)
+  file, err := os.Create(tmpFilePath)
   if err != nil {
-    log.Fatal(err)
+    Logf(err.Error())
     return false
   }
   defer file.Close()
 
   bodyBytes, err := ioutil.ReadAll(res.Body)
   if err != nil {
-    log.Fatal(err)
+    Logf(err.Error())
     return false
   }
 
   file.Write(bodyBytes)
+
+  Logf("キャッシュファイルを作成しました", tmpFilePath)
+
 
   return true
 }
@@ -196,7 +218,7 @@ func AnalyzeHtml(r io.Reader) (WeatherItems, error) {
   // Load the HTML document
   doc, err := goquery.NewDocumentFromReader(r)
   if err != nil {
-    log.Fatal("HTMLの解析が正しく行えませんでした。")
+    Logf("HTMLの解析が正しく行えませんでした。")
     return nil, err
   }
 
@@ -231,9 +253,21 @@ func Exists(filename string) bool {
 }
 
 func CacheFilePath(name string) string {
+  if name == "" {
+    return "./.cache"
+  }
+
   t := time.Now()
   // https://qiita.com/unbabel/items/c8782420391c108e3cac
   const tmpFileLayout = "2006010215"
 
   return "./.cache" + "/" + name + t.Format(tmpFileLayout)
+}
+
+func Logf(format string, v ...interface{}) {
+  if Logger == nil {
+    log.Printf(format, v...)
+    return
+  }
+  Logger.Printf(format, v...)
 }
